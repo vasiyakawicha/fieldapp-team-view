@@ -1,0 +1,10 @@
+name = "fieldapp-team-view"
+compatibility_date = "2026-09-01"
+pages_build_output_dir = "public"
+
+# Read-only mirror: written to only by the main site's
+# functions/api/moisture/approve.js. This site has no write endpoints at all.
+[[d1_databases]]
+binding = "TEAM_DB"
+database_name = "fieldapp-team-view-db"
+database_id = "bc372853-b46f-4a5b-894e-4dcc0feca67a"

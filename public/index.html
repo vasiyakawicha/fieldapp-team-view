@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ข้อมูลความชื้นที่อนุมัติแล้ว</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --surface-2: #eef0f4;
+    --ink: #1a1d24;
+    --ink-soft: #5b6272;
+    --line: #e2e5ea;
+    --line-strong: #c9ced8;
+    --clay: #5b2c87;
+    --moss: #7a2331;
+    --gold: #d97706;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans Thai', 'IBM Plex Sans', sans-serif;
+    line-height: 1.5;
+  }
+  header {
+    background: linear-gradient(190deg, var(--clay) 0%, var(--moss) 100%);
+    color: #fff;
+    padding: 28px 20px;
+  }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; font-size: 13px; opacity: 0.85; }
+  main { max-width: 960px; margin: 0 auto; padding: 20px; }
+  .filter-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(91, 44, 135, 0.08);
+    border: 1px solid rgba(91, 44, 135, 0.25);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+  .filter-banner a { color: var(--clay); font-weight: 600; text-decoration: none; }
+  .plot-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(20,20,40,0.03), 0 6px 16px rgba(20,20,40,0.04);
+  }
+  .plot-card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .plot-code { font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 16px; color: var(--clay); }
+  .plot-meta { font-size: 12.5px; color: var(--ink-soft); }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { padding: 7px 9px; text-align: center; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  thead th { background: var(--surface-2); color: var(--ink-soft); font-weight: 600; }
+  td.num { font-family: 'IBM Plex Mono', monospace; color: var(--ink); font-weight: 600; }
+  .empty-state, .loading-state {
+    text-align: center;
+    color: var(--ink-soft);
+    padding: 60px 20px;
+    font-size: 14px;
+  }
+  footer { text-align: center; font-size: 11.5px; color: var(--ink-soft); padding: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ข้อมูลความชื้นที่อนุมัติแล้ว</h1>
+  <p>เฉพาะค่าเฉลี่ยความชื้นของแปลงที่ใช้งานอยู่ ที่ได้รับการอนุมัติจากทีมภาคสนามแล้วเท่านั้น</p>
+</header>
+<main>
+  <div id="filter-banner" style="display:none" class="filter-banner"></div>
+  <div id="content" class="loading-state">กำลังโหลดข้อมูล…</div>
+</main>
+<footer>อัปเดตล่าสุดตามรอบที่อนุมัติ — ไม่ใช่ข้อมูลดิบรายจุด/ผลแล็บ</footer>
+
+<script>
+(function () {
+  const params = new URLSearchParams(location.search);
+  const filterPlot = params.get('plot');
+  const contentEl = document.getElementById('content');
+  const bannerEl = document.getElementById('filter-banner');
+
+  if (filterPlot) {
+    bannerEl.style.display = 'flex';
+    bannerEl.textContent = 'กำลังกรองเฉพาะแปลง ' + filterPlot + ' — ';
+    const link = document.createElement('a');
+    link.href = location.pathname;
+    link.textContent = 'ดูทุกแปลง';
+    bannerEl.appendChild(link);
+  }
+
+  fetch('/api/approved')
+    .then((r) => r.json())
+    .then((body) => {
+      let rows = body.rows || [];
+      if (filterPlot) rows = rows.filter((r) => r.plot_code === filterPlot);
+      if (!rows.length) {
+        contentEl.className = 'empty-state';
+        contentEl.textContent = filterPlot
+          ? 'ยังไม่มีข้อมูลที่อนุมัติแล้วสำหรับแปลง ' + filterPlot
+          : 'ยังไม่มีข้อมูลที่อนุมัติ';
+        return;
+      }
+      const byPlot = {};
+      rows.forEach((r) => {
+        if (!byPlot[r.plot_code]) byPlot[r.plot_code] = { meta: r, list: [] };
+        byPlot[r.plot_code].list.push(r);
+      });
+      contentEl.className = '';
+      contentEl.innerHTML = '';
+      Object.keys(byPlot)
+        .sort()
+        .forEach((code) => {
+          const group = byPlot[code];
+          const card = document.createElement('div');
+          card.className = 'plot-card';
+          const head = document.createElement('div');
+          head.className = 'plot-card-head';
+          head.innerHTML =
+            '<span class="plot-code">' + esc(code) + '</span>' +
+            '<span class="plot-meta">' + esc(group.meta.province) + ' · ' + esc(group.meta.crop_type) + '</span>';
+          card.appendChild(head);
+
+          const table = document.createElement('table');
+          table.innerHTML =
+            '<thead><tr>' +
+            '<th>รอบที่</th><th>ป้ายรอบ</th><th>วันที่วัด</th><th>DAP</th>' +
+            '<th>ความชื้น 0–10 ซม. (%)</th><th>ความชื้น 10–20 ซม. (%)</th><th>อนุมัติเมื่อ</th>' +
+            '</tr></thead>';
+          const tbody = document.createElement('tbody');
+          group.list
+            .sort((a, b) => a.round - b.round)
+            .forEach((r) => {
+              const tr = document.createElement('tr');
+              tr.innerHTML =
+                '<td>' + esc(r.round) + '</td>' +
+                '<td>' + esc(r.round_label || '–') + '</td>' +
+                '<td>' + esc(r.measured_date) + '</td>' +
+                '<td>' + esc(r.dap ?? '–') + '</td>' +
+                '<td class="num">' + fmtNum(r.moist_0_10cm_avg) + '</td>' +
+                '<td class="num">' + fmtNum(r.moist_10_20cm_avg) + '</td>' +
+                '<td>' + esc((r.approved_at || '').slice(0, 10)) + '</td>';
+              tbody.appendChild(tr);
+            });
+          table.appendChild(tbody);
+          card.appendChild(table);
+          contentEl.appendChild(card);
+        });
+    })
+    .catch(() => {
+      contentEl.className = 'empty-state';
+      contentEl.textContent = 'โหลดข้อมูลไม่สำเร็จ ลองรีเฟรชหน้าใหม่';
+    });
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function fmtNum(v) {
+    return v === null || v === undefined ? '–' : Number(v).toFixed(1);
+  }
+})();
+</script>
+</body>
+</html>
