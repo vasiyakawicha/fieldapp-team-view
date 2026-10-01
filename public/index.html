@@ -60,6 +60,21 @@
   th, td { padding: 7px 9px; text-align: center; border-bottom: 1px solid var(--line); white-space: nowrap; }
   thead th { background: var(--surface-2); color: var(--ink-soft); font-weight: 600; }
   td.num { font-family: 'IBM Plex Mono', monospace; color: var(--ink); font-weight: 600; }
+  .point-toggle {
+    font-size: 11.5px;
+    font-family: inherit;
+    color: var(--clay);
+    background: rgba(91, 44, 135, 0.08);
+    border: 1px solid rgba(91, 44, 135, 0.25);
+    border-radius: 999px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+  .point-toggle:hover { background: rgba(91, 44, 135, 0.15); }
+  .point-detail-row td { background: var(--surface-2); padding: 10px 9px; }
+  .point-detail-row table { font-size: 11.5px; }
+  .point-detail-row thead th { background: var(--surface); }
+  .point-detail-empty { color: var(--ink-soft); font-size: 11.5px; padding: 4px 0; }
   .empty-state, .loading-state {
     text-align: center;
     color: var(--ink-soft);
@@ -78,7 +93,7 @@
   <div id="filter-banner" style="display:none" class="filter-banner"></div>
   <div id="content" class="loading-state">กำลังโหลดข้อมูล…</div>
 </main>
-<footer>อัปเดตล่าสุดตามรอบที่อนุมัติ — ไม่ใช่ข้อมูลดิบรายจุด/ผลแล็บ</footer>
+<footer>อัปเดตล่าสุดตามรอบที่อนุมัติ — ค่าเฉลี่ยความชื้นเท่านั้น (ทั้งแปลงและรายจุด) ไม่มี EC/ความหนาแน่น/ผลแล็บ/พิกัด GPS</footer>
 
 <script>
 (function () {
@@ -132,7 +147,7 @@
           table.innerHTML =
             '<thead><tr>' +
             '<th>รอบที่</th><th>ป้ายรอบ</th><th>วันที่วัด</th><th>DAP</th>' +
-            '<th>ความชื้น 0–10 ซม. (%)</th><th>ความชื้น 10–20 ซม. (%)</th><th>อนุมัติเมื่อ</th>' +
+            '<th>ความชื้น 0–10 ซม. (%)</th><th>ความชื้น 10–20 ซม. (%)</th><th>อนุมัติเมื่อ</th><th>รายจุด</th>' +
             '</tr></thead>';
           const tbody = document.createElement('tbody');
           group.list
@@ -146,8 +161,29 @@
                 '<td>' + esc(r.dap ?? '–') + '</td>' +
                 '<td class="num">' + fmtNum(r.moist_0_10cm_avg) + '</td>' +
                 '<td class="num">' + fmtNum(r.moist_10_20cm_avg) + '</td>' +
-                '<td>' + esc((r.approved_at || '').slice(0, 10)) + '</td>';
+                '<td>' + esc((r.approved_at || '').slice(0, 10)) + '</td>' +
+                '<td></td>';
               tbody.appendChild(tr);
+
+              const detailTr = document.createElement('tr');
+              detailTr.className = 'point-detail-row';
+              detailTr.style.display = 'none';
+              const detailTd = document.createElement('td');
+              detailTd.colSpan = 8;
+              detailTd.appendChild(buildPointsTable(r.points || []));
+              detailTr.appendChild(detailTd);
+              tbody.appendChild(detailTr);
+
+              const toggleBtn = document.createElement('button');
+              toggleBtn.className = 'point-toggle';
+              toggleBtn.type = 'button';
+              toggleBtn.textContent = 'ดูรายจุด (' + (r.points ? r.points.length : 0) + ')';
+              toggleBtn.addEventListener('click', () => {
+                const showing = detailTr.style.display !== 'none';
+                detailTr.style.display = showing ? 'none' : 'table-row';
+                toggleBtn.textContent = (showing ? 'ดูรายจุด (' : 'ซ่อนรายจุด (') + (r.points ? r.points.length : 0) + ')';
+              });
+              tr.lastElementChild.appendChild(toggleBtn);
             });
           table.appendChild(tbody);
           card.appendChild(table);
@@ -158,6 +194,32 @@
       contentEl.className = 'empty-state';
       contentEl.textContent = 'โหลดข้อมูลไม่สำเร็จ ลองรีเฟรชหน้าใหม่';
     });
+
+  function buildPointsTable(points) {
+    if (!points.length) {
+      const div = document.createElement('div');
+      div.className = 'point-detail-empty';
+      div.textContent = 'ไม่มีข้อมูลรายจุดสำหรับรอบนี้';
+      return div;
+    }
+    const t = document.createElement('table');
+    t.innerHTML =
+      '<thead><tr><th>จุดที่</th><th>พิกัด</th><th>ความชื้น 0–10 ซม. (%)</th><th>ความชื้น 10–20 ซม. (%)</th></tr></thead>';
+    const tb = document.createElement('tbody');
+    [...points]
+      .sort((a, b) => a.pointIndex - b.pointIndex)
+      .forEach((p) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + esc(p.pointIndex) + '</td>' +
+          '<td>' + esc(p.coord || '–') + '</td>' +
+          '<td class="num">' + fmtNum(p.moist0_10) + '</td>' +
+          '<td class="num">' + fmtNum(p.moist10_20) + '</td>';
+        tb.appendChild(tr);
+      });
+    t.appendChild(tb);
+    return t;
+  }
 
   function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
