@@ -1,8 +1,8 @@
 -- D1 schema for fieldapp-team-view-db — the copy-on-approve read-only mirror.
--- Contains ONLY approved, plot-averaged moisture values (and, as of the
--- second table, per-point moisture averages) for active plots. No raw probe
--- replicate readings, EC/density/lab results, GPS, photos, or other menus
--- ever get written here — see functions/api/moisture/approve.js.
+-- Contains ONLY approved, plot-averaged moisture values, per-point moisture
+-- averages, and (per approved_plot_photos) a link to the plot's overview
+-- photo. No raw probe replicate readings, EC/density/lab results, GPS, or
+-- other menus ever get written here — see functions/api/moisture/approve.js.
 --
 -- Run once after creating the D1 database:
 --   wrangler d1 execute fieldapp-team-view-db --remote --file=schema-team-view.sql
@@ -35,4 +35,13 @@ CREATE TABLE IF NOT EXISTS approved_moisture_points (
   moist_0_10cm REAL,
   moist_10_20cm REAL,
   UNIQUE(plot_code, round, point_index)
+);
+
+-- One row per plot: just a link to its overview photo (already public on the
+-- main site, either a static default photo or the latest field-upload), so
+-- the team site can show it on demand instead of embedding image bytes here.
+CREATE TABLE IF NOT EXISTS approved_plot_photos (
+  plot_code TEXT PRIMARY KEY,
+  photo_url TEXT NOT NULL,
+  approved_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
